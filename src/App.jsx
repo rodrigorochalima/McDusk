@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
+import dataService from './services/dataService'
+import yahooFinanceService from './services/yahooFinanceService'
+import imageProcessingService from './services/imageProcessingService'
+import AssetManagement from './components/AssetManagement'
+import ImageProcessor from './components/ImageProcessor'
 
 function App() {
   const [activeTab, setActiveTab] = useState('visao')
@@ -43,19 +48,108 @@ function App() {
   const [snowballTarget, setSnowballTarget] = useState(500)
   const [customSnowballTarget, setCustomSnowballTarget] = useState('')
 
+  // Estados para gerenciamento de ativos (NOVO)
+  const [showAssetManager, setShowAssetManager] = useState(false)
+  const [assetSearch, setAssetSearch] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [newAsset, setNewAsset] = useState({
+    symbol: '',
+    quantity: '',
+    averagePrice: '',
+    category: 'renda_variavel'
+  })
+  
+  // Estados para barra superior (NOVO)
+  const [previdenciaValue, setPrevidenciaValue] = useState('45000')
+  const [topChatInput, setTopChatInput] = useState('')
+  
+  // Estados para processamento de imagens (NOVO)
+  const [uploadedImage, setUploadedImage] = useState(null)
+  const [processingImage, setProcessingImage] = useState(false)
+  const [imageAnalysisResult, setImageAnalysisResult] = useState(null)
+  
+  // Estados para persistência de dados (NOVO)
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [syncStatus, setSyncStatus] = useState('idle') // idle, syncing, success, error
+
   // Carregar dados
   useEffect(() => {
-    fetchData()
+    loadPortfolioData()
     
-    // Atualizar a cada minuto
+    // Atualizar cotações a cada minuto
     const interval = setInterval(() => {
-      fetchData()
+      updateQuotes()
     }, 60000)
     
     return () => clearInterval(interval)
   }, [])
   
+  // Carregar dados da carteira
+  const loadPortfolioData = async () => {
+    try {
+      setLoading(true)
+      setSyncStatus('syncing')
+      
+      const data = await dataService.loadPortfolioData()
+      setPortfolioData(data)
+      setLocalPortfolio(data)
+      setDataLoaded(true)
+      setSyncStatus('success')
+      
+      const now = new Date()
+      setLastUpdate(now.toLocaleString('pt-BR'))
+      
+      console.log('Dados da carteira carregados:', data)
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+      setSyncStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Atualizar cotações via Yahoo Finance
+  const updateQuotes = async () => {
+    if (!portfolioData) return
+    
+    try {
+      const allAssets = getAllAssets(portfolioData.portfolio_allocation.allocation)
+      const symbols = allAssets.map(asset => asset.symbol)
+      
+      const quotes = await yahooFinanceService.getMultipleQuotes(symbols)
+      
+      // Atualizar preços na carteira
+      let hasUpdates = false
+      quotes.forEach(quote => {
+        if (quote.data && quote.data.price) {
+          // Atualizar preço do ativo
+          dataService.updateAsset(quote.symbol, {
+            current_price: quote.data.price,
+            last_quote_update: new Date().toISOString()
+          })
+          hasUpdates = true
+        }
+      })
+      
+      if (hasUpdates) {
+        // Recarregar dados atualizados
+        const updatedData = await dataService.loadPortfolioData()
+        setPortfolioData(updatedData)
+        setLocalPortfolio(updatedData)
+      }
+      
+    } catch (error) {
+      console.warn('Erro ao atualizar cotações:', error)
+    }
+  }
+
   const fetchData = async () => {
+    // Manter compatibilidade com código existente
+    await loadPortfolioData()
+  }
+  
+  const oldFetchData = async () => {
     try {
       // Dados reais com APENAS os 24 ativos que o usuário informou
       const data = {
@@ -2589,6 +2683,63 @@ ${getAutomaticSuggestions(command.symbol, 'FII').slice(0, 3).map((asset, i) =>
         </div>
       </div>
 
+      {/* Barra Superior com Previdência e Chat */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 mb-4">
+        <div className="max-w-md mx-auto space-y-3">
+          {/* Primeira linha - Previdência */}
+          <div className="flex items-center space-x-3">
+            <div className="text-sm font-semibold">🏦 Previdência:</div>
+            <input 
+              type="text"
+              value={previdenciaValue}
+              onChange={(e) => setPrevidenciaValue(e.target.value)}
+              className="flex-1 bg-white bg-opacity-20 border border-white border-opacity-30 rounded px-3 py-1 text-sm placeholder-white placeholder-opacity-70 text-white"
+              placeholder="R$ 45.000"
+            />
+            <div className="text-xs opacity-80">PGBL/VGBL</div>
+          </div>
+          
+          {/* Segunda linha - Chat IA */}
+          <div className="flex items-center space-x-3">
+            <div className="text-sm font-semibold">🤖 Chat IA:</div>
+            <input 
+              type="text"
+              value={topChatInput}
+              onChange={(e) => setTopChatInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && topChatInput.trim()) {
+                  // Redirecionar para aba Insights e enviar mensagem
+                  setActiveTab('insights')
+                  setChatInput(topChatInput)
+                  setTopChatInput('')
+                  // Simular envio após um pequeno delay
+                  setTimeout(() => {
+                    handleChatSubmit()
+                  }, 100)
+                }
+              }}
+              className="flex-1 bg-white bg-opacity-20 border border-white border-opacity-30 rounded px-3 py-1 text-sm placeholder-white placeholder-opacity-70 text-white"
+              placeholder="Pergunte sobre sua carteira..."
+            />
+            <button 
+              onClick={() => {
+                if (topChatInput.trim()) {
+                  setActiveTab('insights')
+                  setChatInput(topChatInput)
+                  setTopChatInput('')
+                  setTimeout(() => {
+                    handleChatSubmit()
+                  }, 100)
+                }
+              }}
+              className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded px-3 py-1 text-sm transition-colors"
+            >
+              💬
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Abas Fixas */}
       <div className="bg-white shadow-sm mb-4 sticky top-0 z-10">
         <div className="max-w-md mx-auto flex overflow-x-auto">
@@ -2608,6 +2759,12 @@ ${getAutomaticSuggestions(command.symbol, 'FII').slice(0, 3).map((asset, i) =>
             onClick={() => setActiveTab('analise')}
           >
             Análise 📈
+          </button>
+          <button 
+            className={`flex-1 py-3 px-2 text-center text-sm ${activeTab === 'gestao' ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
+            onClick={() => setActiveTab('gestao')}
+          >
+            Gestão 🔧
           </button>
           <button 
             className={`flex-1 py-3 px-2 text-center text-sm ${activeTab === 'insights' ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
@@ -3378,6 +3535,178 @@ ${getAutomaticSuggestions(command.symbol, 'FII').slice(0, 3).map((asset, i) =>
         })()
       )}
 
+          {/* ABA GESTÃO */}
+          {activeTab === 'gestao' && portfolioData && (
+            <div className="space-y-4">
+              {/* Header da Gestão */}
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold">🔧 Gestão da Carteira</h2>
+                    <p className="text-sm text-gray-600">Gerencie seus ativos e operações</p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    syncStatus === 'success' ? 'bg-green-100 text-green-800' :
+                    syncStatus === 'syncing' ? 'bg-blue-100 text-blue-800' :
+                    syncStatus === 'error' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {syncStatus === 'success' ? '✅ Sincronizado' :
+                     syncStatus === 'syncing' ? '🔄 Sincronizando' :
+                     syncStatus === 'error' ? '❌ Erro' :
+                     '⏸️ Aguardando'}
+                  </div>
+                </div>
+
+                {/* Estatísticas Rápidas */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {Object.values(portfolioData.portfolio_allocation.allocation).reduce((sum, cat) => sum + cat.count, 0)}
+                    </div>
+                    <div className="text-xs text-gray-600">Total de Ativos</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {operationHistory.length}
+                    </div>
+                    <div className="text-xs text-gray-600">Operações</div>
+                  </div>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={() => setShowAssetManager(true)}
+                    className="bg-blue-500 text-white rounded-lg py-3 px-4 text-sm font-semibold hover:bg-blue-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <span>➕</span>
+                    <span>Adicionar Ativo</span>
+                  </button>
+                  <button 
+                    onClick={() => updateQuotes()}
+                    className="bg-green-500 text-white rounded-lg py-3 px-4 text-sm font-semibold hover:bg-green-600 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <span>🔄</span>
+                    <span>Atualizar Cotações</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Processamento de Imagens */}
+              <div className="bg-white rounded-lg shadow p-4">
+                <h3 className="text-lg font-semibold mb-3">📸 Análise de Imagens</h3>
+                <ImageProcessor 
+                  onOperationDetected={(operation) => {
+                    setDetectedOperations(prev => [...prev, operation])
+                  }}
+                  onProcessingStart={() => setProcessingImage(true)}
+                  onProcessingEnd={() => setProcessingImage(false)}
+                />
+              </div>
+
+              {/* Operações Detectadas */}
+              {detectedOperations.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-4">
+                  <h3 className="text-lg font-semibold mb-3">🔍 Operações Detectadas</h3>
+                  <div className="space-y-3">
+                    {detectedOperations.map((operation) => (
+                      <div key={operation.id} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-3 h-3 rounded-full ${
+                              operation.type === 'buy' ? 'bg-green-500' : 'bg-red-500'
+                            }`}></div>
+                            <span className="font-semibold">{operation.asset}</span>
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              {operation.type === 'buy' ? 'Compra' : 'Venda'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {operation.confidence && `${(operation.confidence * 100).toFixed(0)}% confiança`}
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                          <div>Quantidade: {operation.quantity}</div>
+                          <div>Preço: R$ {operation.price?.toFixed(2)}</div>
+                          <div>Total: R$ {operation.totalValue?.toFixed(2)}</div>
+                          <div>Arquivo: {operation.fileName}</div>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <button 
+                            onClick={() => confirmOperation(operation.id)}
+                            className="flex-1 bg-green-500 text-white rounded py-2 text-xs hover:bg-green-600 transition-colors"
+                          >
+                            ✅ Confirmar
+                          </button>
+                          <button 
+                            onClick={() => setDetectedOperations(prev => prev.filter(op => op.id !== operation.id))}
+                            className="flex-1 bg-red-500 text-white rounded py-2 text-xs hover:bg-red-600 transition-colors"
+                          >
+                            ❌ Rejeitar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico de Operações */}
+              {operationHistory.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-4">
+                  <h3 className="text-lg font-semibold mb-3">📋 Operações Recentes</h3>
+                  <div className="space-y-2">
+                    {operationHistory.slice(0, 5).map((operation, index) => (
+                      <div key={index} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-2 h-2 rounded-full ${
+                            operation.type === 'buy' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                          <div>
+                            <div className="text-sm font-semibold">{operation.asset}</div>
+                            <div className="text-xs text-gray-500">
+                              {operation.quantity} cotas • R$ {operation.price?.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold">
+                            R$ {operation.totalValue?.toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {operation.timestamp && new Date(operation.timestamp).toLocaleDateString('pt-BR')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Distribuição por Categoria */}
+              <div className="bg-white rounded-lg shadow p-4">
+                <h3 className="text-lg font-semibold mb-3">📊 Distribuição Atual</h3>
+                <div className="space-y-3">
+                  {Object.entries(portfolioData.portfolio_allocation.allocation).map(([key, category]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="text-sm font-semibold">{category.name}</div>
+                        <div className="text-xs text-gray-500">{category.count} ativos</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold">{category.percentage}%</div>
+                        <div className="text-xs text-gray-500">{formatCurrency(category.value)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ABA INSIGHTS */}
           {activeTab === 'insights' && portfolioData && (
             // Definir allocation para uso na aba Insights
@@ -3905,6 +4234,17 @@ ${getAutomaticSuggestions(command.symbol, 'FII').slice(0, 3).map((asset, i) =>
 
       {/* Modal de informações fundamentalistas */}
       {renderFundamentalInfoModal()}
+
+      {/* Componente de Gerenciamento de Ativos */}
+      <AssetManagement 
+        showAssetManager={showAssetManager}
+        setShowAssetManager={setShowAssetManager}
+        onAssetAdded={async (asset) => {
+          // Recarregar dados após adicionar ativo
+          await loadPortfolioData()
+        }}
+        portfolioData={portfolioData}
+      />
     </div>
   )
 }
