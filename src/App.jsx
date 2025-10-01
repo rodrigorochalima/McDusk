@@ -224,16 +224,23 @@ function App() {
                 <span className={`asset-type ${ativo.tipo === 'FII' ? 'fii' : ativo.tipo === 'ETF' ? 'etf' : ativo.tipo === 'Internacional' ? 'internacional' : 'acao'}`}>
                   {ativo.tipo}
                 </span>
-                {ativo.simbolo !== 'PVBI11' && (
-                  <div className="asset-actions">
-                    <button className="asset-action edit" onClick={() => {
-                      setEditingAsset(ativo);
-                      setShowEditAssetModal(true);
-                    }}>
-                      [E] Editar
-                    </button>
-                  </div>
-                )}
+                <div className="asset-actions">
+                  <button className="asset-action edit" onClick={() => {
+                    setEditingAsset(ativo);
+                    setShowEditAssetModal(true);
+                  }}>
+                    [E] Editar
+                  </button>
+                  <button className="asset-action">
+                    [C] Comprar
+                  </button>
+                  <button className="asset-action">
+                    [V] Vender
+                  </button>
+                  <button className="asset-action">
+                    [X] Excluir
+                  </button>
+                </div>
               </div>
               <div className="asset-details">
                 <p>{ativo.quantidade} cotas • R$ {ativo.precoMedio.toFixed(2)} • {ativo.resultadoPercentual > 0 ? '+' : ''}{ativo.resultadoPercentual}%</p>
@@ -372,9 +379,9 @@ function App() {
             </div>
             
             <div className="chat-input-container">
-              <input
-                type="text"
-                className="chat-input"
+              <input 
+                type="text" 
+                className="chat-input" 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -386,17 +393,17 @@ function App() {
             </div>
             
             <div className="chat-suggestions">
-              <div className="suggestion-chip" onClick={() => setChatInput('Análise da minha carteira')}>
-                Análise da minha carteira
+              <div className="suggestion-chip" onClick={() => setChatInput("Analise minha carteira")}>
+                Analise minha carteira
               </div>
-              <div className="suggestion-chip" onClick={() => setChatInput('Sugestões de rebalanceamento')}>
-                Sugestões de rebalanceamento
+              <div className="suggestion-chip" onClick={() => setChatInput("Recomende rebalanceamento")}>
+                Recomende rebalanceamento
               </div>
-              <div className="suggestion-chip" onClick={() => setChatInput('Ativos em promoção hoje')}>
-                Ativos em promoção hoje
+              <div className="suggestion-chip" onClick={() => setChatInput("Ativos em promoção")}>
+                Ativos em promoção
               </div>
-              <div className="suggestion-chip" onClick={() => setChatInput('Estratégia de lucro parcial')}>
-                Estratégia de lucro parcial
+              <div className="suggestion-chip" onClick={() => setChatInput("Devo realizar lucro parcial?")}>
+                Devo realizar lucro parcial?
               </div>
             </div>
           </div>
@@ -410,17 +417,8 @@ function App() {
     return (
       <div className="tab-content">
         <div className="card">
-          <h2 className="card-title">💡 Insights de Mercado</h2>
-          
-          <div className="asset-card positive">
-            <h3>QBTC11 (+83,1%)</h3>
-            <p>ETF de Bitcoin está em alta, mas considere realizar lucros parciais.</p>
-          </div>
-          
-          <div className="asset-card negative">
-            <h3>⚠️ Atenção Necessária</h3>
-            <p>TGAR11 (-18.92%) e PVBI11 (-16.31%) precisam de análise. Considere substituição.</p>
-          </div>
+          <h2 className="card-title">💡 Insights</h2>
+          <p>Insights sobre sua carteira serão implementados aqui.</p>
         </div>
       </div>
     );
@@ -433,7 +431,6 @@ function App() {
         <div className="previdencia-container">
           <div className="previdencia-header">
             <h2>💰 Minha Previdência</h2>
-            
             <div className="previdencia-periodo-selector">
               <button 
                 className={`periodo-button ${periodoRentabilidade === '1m' ? 'active' : ''}`}
@@ -486,16 +483,16 @@ function App() {
           </div>
           
           <div className="previdencia-fundos">
-            {fundosPrevidencia.map((fundo, index) => (
+            {fundosPrevidencia.map((fundo) => (
               <div 
-                key={index} 
+                key={fundo.id} 
                 className="previdencia-fundo-card"
                 onClick={() => setSelectedFundoPrevidencia(selectedFundoPrevidencia === fundo.id ? null : fundo.id)}
               >
                 <div className="previdencia-fundo-header">
                   <span className="previdencia-fundo-name">{fundo.nome}</span>
-                  <span className={`previdencia-fundo-rentabilidade ${fundo.rentabilidade[periodoRentabilidade] >= fundo.cdi[periodoRentabilidade] ? 'positive' : 'negative'}`}>
-                    {fundo.rentabilidade[periodoRentabilidade] > 0 ? '+' : ''}{fundo.rentabilidade[periodoRentabilidade].toFixed(2)}%
+                  <span className={`previdencia-fundo-rentabilidade ${fundo.rentabilidade[periodoRentabilidade] >= 0 ? 'positive' : 'negative'}`}>
+                    {fundo.rentabilidade[periodoRentabilidade] >= 0 ? '+' : ''}{fundo.rentabilidade[periodoRentabilidade].toFixed(2)}%
                   </span>
                 </div>
                 
