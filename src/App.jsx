@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
-import portfolioData from './portfolio-data-new';
+import { newPortfolioData } from './new-portfolio-data.js';
 import { searchB3Assets, getAssetType } from './b3-api';
 import { fundosPrevidencia, cdiData, aportesPrevidencia, previdenciaTotal } from './previdencia-data';
 
