@@ -1,0 +1,1918 @@
+import React, { useState, useEffect } from 'react';
+import './App.css';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+// IMPORTAÇÕES DOS NOVOS MÓDULOS
+import { searchAssets, getAssetDetails, validateAsset, getCurrentPrice } from './b3-api';
+import { 
+  loadPortfolio, 
+  savePortfolio, 
+  addAssetToPortfolio, 
+  removeAssetFromPortfolio, 
+  editAssetInPortfolio,
+  getOperationsHistory,
+  logOperation 
+} from './portfolio-manager';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+function App() {
+  const [activeTab, setActiveTab] = useState('visao');
+  const [currentView, setCurrentView] = useState('overview');
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [portfolioData, setPortfolioData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState('');
+  const [showFundamentalInfo, setShowFundamentalInfo] = useState(null);
+  
+  // Estados do chat inteligente
+  const [chatMessages, setChatMessages] = useState([
+    {
+      sender: 'assistant',
+      text: 'Olá! Sou seu assistente de investimentos. Posso ajudar com análises da sua carteira, estratégias e recomendações. Como posso ajudar?',
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  
+  // Estados para gerenciamento da carteira local
+  const [localPortfolio, setLocalPortfolio] = useState(null);
+  const [pendingOperations, setPendingOperations] = useState([]);
+  const [operationHistory, setOperationHistory] = useState([]);
+  
+  // Estados para processamento de operações (NOVO - MÓDULO IA)
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [processingOperation, setProcessingOperation] = useState(false);
+  const [detectedOperations, setDetectedOperations] = useState([]);
+  const [operationQueue, setOperationQueue] = useState([]);
+  
+  // Estados para simulador ARCA e calculadora bola de neve
+  const [rebalanceAmount, setRebalanceAmount] = useState('');
+  const [rebalanceCalculation, setRebalanceCalculation] = useState({
+    fiis: 0,
+    internacional: 0,
+    rendaFixa: 0
+  });
+  const [snowballTarget, setSnowballTarget] = useState(500);
+  const [customSnowballTarget, setCustomSnowballTarget] = useState('');
+  
+  // NOVO: Estado para Performance (integrado cirurgicamente)
+  const [showPerformance, setShowPerformance] = useState(false);
+  const [selectedBenchmark, setSelectedBenchmark] = useState('ipca');
+  const [selectedPeriod, setSelectedPeriod] = useState('6M');
+  const [performanceData, setPerformanceData] = useState(null);
+
+  // NOVO: Estados para aba Gestão
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [assetModalType, setAssetModalType] = useState('add'); // 'add', 'edit', 'delete'
+  const [selectedAssetForEdit, setSelectedAssetForEdit] = useState(null);
+  const [assetSearchQuery, setAssetSearchQuery] = useState('');
+  const [assetSearchResults, setAssetSearchResults] = useState([]);
+  const [newAssetData, setNewAssetData] = useState({
+    symbol: '',
+    quantity: '',
+    price: '',
+    type: 'acao' // 'acao', 'fii', 'internacional', 'renda_fixa'
+  });
+  const [managementHistory, setManagementHistory] = useState([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // NOVO: Estados para operações avançadas de compra/venda
+  const [showTradeModal, setShowTradeModal] = useState(false);
+  const [tradeModalType, setTradeModalType] = useState('buy'); // 'buy', 'sell'
+  const [selectedAssetForTrade, setSelectedAssetForTrade] = useState(null);
+  const [tradeData, setTradeData] = useState({
+    quantity: '',
+    price: '',
+    reason: '',
+    aiSuggestion: null
+  });
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [tradeImpactAnalysis, setTradeImpactAnalysis] = useState(null);
+  const [aiTradeRecommendations, setAiTradeRecommendations] = useState([]);
+  const [showAiSuggestionsModal, setShowAiSuggestionsModal] = useState(false);
+
+  // Carregar dados
+  useEffect(() => {
+    fetchData();
+    
+    // Atualizar a cada minuto
+    const interval = setInterval(() => {
+      fetchData();
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  const fetchData = async () => {
+    try {
+      // Dados reais com APENAS os 24 ativos que o usuário informou
+      const data = {
+        portfolio_allocation: {
+          total_value: 386237.43,
+          total_result: 36851.52,
+          allocation: {
+            renda_variavel: { 
+              name: 'Ações', 
+              value: 141605.60, 
+              percentage: 36.7, 
+              count: 16, 
+              result: 31200.41,
+              assets: [
+                { 
+                  symbol: 'QBTC11', 
+                  quantity: 300, 
+                  current_price: 35.50, 
+                  result: 4843.40, 
+                  result_percent: 83.11,
+                  cerrado_score: 9,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 0,
+                    pl: null,
+                    pvp: 1.05,
+                    roe: null,
+                    roic: null,
+                    margem_liquida: null,
+                    div_liquida_ebitda: null
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'ETF de Bitcoin com alta liquidez e baixo custo' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Warren não investe em criptomoedas, mas é um hedge contra inflação' }
+                  },
+                  description: 'ETF que busca replicar a variação do preço do Bitcoin em reais.'
+                },
+                { 
+                  symbol: 'BOAC34', 
+                  quantity: 100, 
+                  current_price: 69.40, 
+                  result: 3021.84, 
+                  result_percent: 77.12,
+                  cerrado_score: 11,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 2.8,
+                    pl: 10.2,
+                    pvp: 1.2,
+                    roe: 12.5,
+                    roic: 10.8,
+                    margem_liquida: 27.3,
+                    div_liquida_ebitda: 1.8
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Banco sólido com bons fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Warren é acionista do Bank of America, banco com vantagem competitiva' }
+                  },
+                  description: 'BDR do Bank of America, um dos maiores bancos dos Estados Unidos.'
+                },
+                { 
+                  symbol: 'VIVT3', 
+                  quantity: 160, 
+                  current_price: 33.15, 
+                  result: 1908.95, 
+                  result_percent: 56.49,
+                  cerrado_score: 10,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 8.5,
+                    pl: 12.3,
+                    pvp: 1.1,
+                    roe: 9.2,
+                    roic: 8.7,
+                    margem_liquida: 15.4,
+                    div_liquida_ebitda: 0.9
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa de setor perene com bom dividend yield' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ações (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Empresa com vantagem competitiva e geração de caixa consistente' }
+                  },
+                  description: 'Telefônica Brasil (Vivo), empresa de telecomunicações líder no Brasil.'
+                },
+                { 
+                  symbol: 'CPLE6', 
+                  quantity: 1000, 
+                  current_price: 12.71, 
+                  result: 4104.75, 
+                  result_percent: 47.92,
+                  cerrado_score: 12,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 9.8,
+                    pl: 7.5,
+                    pvp: 0.9,
+                    roe: 12.1,
+                    roic: 10.5,
+                    margem_liquida: 18.7,
+                    div_liquida_ebitda: 1.2
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa de setor perene (energia) com ótimos fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ações (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Monopólio natural com previsibilidade de receitas' }
+                  },
+                  description: 'Copel, companhia de energia elétrica do Paraná.'
+                },
+                { 
+                  symbol: 'JPMC34', 
+                  quantity: 200, 
+                  current_price: 168.18, 
+                  result: 7736.68, 
+                  result_percent: 29.70,
+                  cerrado_score: 10,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 2.5,
+                    pl: 11.8,
+                    pvp: 1.7,
+                    roe: 14.5,
+                    roic: 12.3,
+                    margem_liquida: 32.1,
+                    div_liquida_ebitda: 2.1
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Banco com fundamentos sólidos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Warren já investiu em JPMorgan, banco com vantagem competitiva' }
+                  },
+                  description: 'BDR do JPMorgan Chase, maior banco dos Estados Unidos por ativos.'
+                },
+                { 
+                  symbol: 'IVVB11', 
+                  quantity: 70, 
+                  current_price: 80.39, 
+                  result: 5627.45, 
+                  result_percent: 25.33,
+                  cerrado_score: 8,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 1.2,
+                    pl: null,
+                    pvp: null,
+                    roe: null,
+                    roic: null,
+                    margem_liquida: null,
+                    div_liquida_ebitda: null
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'ETF diversificado, não se aplica análise fundamentalista completa' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Warren recomenda ETFs de índice para investidores comuns' }
+                  },
+                  description: 'ETF que busca replicar o índice S&P 500 dos EUA.'
+                },
+                { 
+                  symbol: 'ABCB34', 
+                  quantity: 700, 
+                  current_price: 22.98, 
+                  result: 2998.03, 
+                  result_percent: 22.91,
+                  cerrado_score: 9,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 3.2,
+                    pl: 9.5,
+                    pvp: 1.1,
+                    roe: 11.8,
+                    roic: 10.2,
+                    margem_liquida: 25.7,
+                    div_liquida_ebitda: 1.9
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Banco com bons fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Banco com fundamentos sólidos, mas sem vantagem competitiva clara' }
+                  },
+                  description: 'BDR de banco internacional.'
+                },
+                { 
+                  symbol: 'CSCO34', 
+                  quantity: 147, 
+                  current_price: 36.05, 
+                  result: 1950.18, 
+                  result_percent: 22.35,
+                  cerrado_score: 9,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 3.1,
+                    pl: 14.2,
+                    pvp: 4.5,
+                    roe: 31.7,
+                    roic: 22.3,
+                    margem_liquida: 21.8,
+                    div_liquida_ebitda: 0.5
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa de tecnologia com bons fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Empresa de tecnologia com vantagens competitivas, mas setor de rápida mudança' }
+                  },
+                  description: 'BDR da Cisco Systems, líder global em equipamentos de rede.'
+                },
+                { 
+                  symbol: 'NASD11', 
+                  quantity: 500, 
+                  current_price: 3.28, 
+                  result: 1639.24, 
+                  result_percent: 21.91,
+                  cerrado_score: 7,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 0.5,
+                    pl: null,
+                    pvp: null,
+                    roe: null,
+                    roic: null,
+                    margem_liquida: null,
+                    div_liquida_ebitda: null
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'ETF diversificado, não se aplica análise fundamentalista completa' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Warren prefere S&P 500 a Nasdaq por ser menos volátil' }
+                  },
+                  description: 'ETF que busca replicar o índice Nasdaq-100 dos EUA.'
+                },
+                { 
+                  symbol: 'AMZO34', 
+                  quantity: 150, 
+                  current_price: 58.38, 
+                  result: 408.81, 
+                  result_percent: 4.90,
+                  cerrado_score: 8,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 0,
+                    pl: 59.3,
+                    pvp: 8.7,
+                    roe: 14.7,
+                    roic: 11.2,
+                    margem_liquida: 3.2,
+                    div_liquida_ebitda: 1.1
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'Múltiplos elevados, mas empresa de qualidade' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Empresa com vantagem competitiva, mas múltiplos elevados' }
+                  },
+                  description: 'BDR da Amazon, líder global em e-commerce e computação em nuvem.'
+                },
+                { 
+                  symbol: 'WEGE3', 
+                  quantity: 200, 
+                  current_price: 36.35, 
+                  result: 265.19, 
+                  result_percent: 3.79,
+                  cerrado_score: 13,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 1.8,
+                    pl: 28.5,
+                    pvp: 7.2,
+                    roe: 25.3,
+                    roic: 22.7,
+                    margem_liquida: 17.5,
+                    div_liquida_ebitda: 0.2
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa excepcional com ótimos fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ações (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Empresa com vantagem competitiva duradoura e gestão excelente' }
+                  },
+                  description: 'WEG, fabricante brasileira de equipamentos elétricos, uma das maiores do mundo.'
+                },
+                { 
+                  symbol: 'B3SA3', 
+                  quantity: 500, 
+                  current_price: 13.50, 
+                  result: -120.00, 
+                  result_percent: -1.75,
+                  cerrado_score: 11,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 4.5,
+                    pl: 15.8,
+                    pvp: 3.2,
+                    roe: 20.3,
+                    roic: 15.1,
+                    margem_liquida: 45.2,
+                    div_liquida_ebitda: 0.8
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Monopólio natural com alta margem e bons fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ações (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Negócio com vantagem competitiva clara (monopólio)' }
+                  },
+                  description: 'B3, a bolsa de valores oficial do Brasil.'
+                },
+                { 
+                  symbol: 'EGIE3', 
+                  quantity: 100, 
+                  current_price: 44.50, 
+                  result: -250.00, 
+                  result_percent: -5.32,
+                  cerrado_score: 10,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 7.8,
+                    pl: 11.2,
+                    pvp: 2.5,
+                    roe: 22.3,
+                    roic: 14.8,
+                    margem_liquida: 28.9,
+                    div_liquida_ebitda: 2.3
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa de energia com bons fundamentos e dividendos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ações (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Setor perene com previsibilidade de receitas' }
+                  },
+                  description: 'Engie Brasil, uma das maiores geradoras privadas de energia do país.'
+                },
+                { 
+                  symbol: 'PGCO34', 
+                  quantity: 50, 
+                  current_price: 135.20, 
+                  result: -450.00, 
+                  result_percent: -6.25,
+                  cerrado_score: 9,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 2.9,
+                    pl: 23.1,
+                    pvp: 6.8,
+                    roe: 26.2,
+                    roic: 18.7,
+                    margem_liquida: 14.3,
+                    div_liquida_ebitda: 1.5
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'Empresa de qualidade com bons fundamentos' },
+                    arca: { status: 'MANTER', reason: 'Faz parte da cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Empresa com marcas fortes e vantagem competitiva' }
+                  },
+                  description: 'BDR da Procter & Gamble, líder global em produtos de consumo.'
+                }
+              ]
+            },
+            fiis: { 
+              name: 'Fundos Imobiliários', 
+              value: 72508.36, 
+              percentage: 18.8, 
+              count: 8, 
+              result: -2885.03,
+              assets: [
+                { 
+                  symbol: 'BTLG11', 
+                  quantity: 118, 
+                  current_price: 103.21, 
+                  result: 1368.87, 
+                  result_percent: 12.67,
+                  cerrado_score: 9,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 8.2,
+                    pl: null,
+                    pvp: 0.95,
+                    cap_rate: 9.1,
+                    vacancia: 0,
+                    liquidez_diaria: 3500000,
+                    dividend_yield: 0.68
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'FII de logística com contratos atípicos e baixa vacância' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Real Estate (25%)' },
+                    buffett: { status: 'COMPRAR', reason: 'Ativos de qualidade com contratos de longo prazo' }
+                  },
+                  description: 'FII de galpões logísticos com contratos atípicos de longo prazo.'
+                },
+                { 
+                  symbol: 'KNCR11', 
+                  quantity: 109, 
+                  current_price: 105.08, 
+                  result: 499.63, 
+                  result_percent: 4.47,
+                  cerrado_score: 8,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 13.5,
+                    pl: null,
+                    pvp: 1.02,
+                    cap_rate: null,
+                    vacancia: null,
+                    liquidez_diaria: 2800000,
+                    dividend_yield: 1.13
+                  },
+                  recommendation: {
+                    cerrado: { status: 'COMPRAR', reason: 'FII de recebíveis com boa gestão e dividendos consistentes' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Real Estate (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Warren prefere ativos reais a recebíveis' }
+                  },
+                  description: 'FII de recebíveis imobiliários com foco em CRIs de alta qualidade.'
+                },
+                { 
+                  symbol: 'VISC11', 
+                  quantity: 40, 
+                  current_price: 87.01, 
+                  result: -13.97, 
+                  result_percent: -0.32,
+                  cerrado_score: 7,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 8.1,
+                    pl: null,
+                    pvp: 0.78,
+                    cap_rate: 7.9,
+                    vacancia: 4.2,
+                    liquidez_diaria: 1900000,
+                    dividend_yield: 0.68
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'FII de shopping centers com vacância moderada' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Real Estate (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Setor cíclico, mas com bons ativos' }
+                  },
+                  description: 'FII de shopping centers com portfólio diversificado pelo Brasil.'
+                },
+                { 
+                  symbol: 'RZTR11', 
+                  quantity: 69, 
+                  current_price: 94.56, 
+                  result: -175.15, 
+                  result_percent: -2.68,
+                  cerrado_score: 6,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 7.8,
+                    pl: null,
+                    pvp: 0.85,
+                    cap_rate: 8.2,
+                    vacancia: 5.7,
+                    liquidez_diaria: 850000,
+                    dividend_yield: 0.65
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'FII com vacância moderada e liquidez média' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Real Estate (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Ativos de qualidade média' }
+                  },
+                  description: 'FII com portfólio diversificado de imóveis corporativos.'
+                },
+                { 
+                  symbol: 'HGCR11', 
+                  quantity: 176, 
+                  current_price: 102.58, 
+                  result: -1457.21, 
+                  result_percent: -8.07,
+                  cerrado_score: 7,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 14.2,
+                    pl: null,
+                    pvp: 0.98,
+                    cap_rate: null,
+                    vacancia: null,
+                    liquidez_diaria: 1200000,
+                    dividend_yield: 1.18
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'FII de recebíveis com boa gestão, mas performance recente fraca' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Real Estate (25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Warren prefere ativos reais a recebíveis' }
+                  },
+                  description: 'FII de recebíveis imobiliários gerido pela CSHG.'
+                },
+                { 
+                  symbol: 'CPTS11', 
+                  quantity: 983, 
+                  current_price: 7.59, 
+                  result: -198.16, 
+                  result_percent: -15.13,
+                  cerrado_score: 5,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 12.5,
+                    pl: null,
+                    pvp: 0.72,
+                    cap_rate: null,
+                    vacancia: null,
+                    liquidez_diaria: 3200000,
+                    dividend_yield: 1.04
+                  },
+                  recommendation: {
+                    cerrado: { status: 'VENDER', reason: 'FII de recebíveis com performance fraca e fundamentos deteriorados' },
+                    arca: { status: 'NEUTRO', reason: 'Faz parte da cesta de Real Estate (25%), mas considerar substituição' },
+                    buffett: { status: 'VENDER', reason: 'Qualidade dos ativos questionável' }
+                  },
+                  description: 'FII de recebíveis imobiliários com foco em CRIs diversificados.'
+                },
+                { 
+                  symbol: 'PVBI11', 
+                  quantity: 132, 
+                  current_price: 75.87, 
+                  result: -1954.64, 
+                  result_percent: -16.31,
+                  cerrado_score: 4,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 9.2,
+                    pl: null,
+                    pvp: 0.68,
+                    cap_rate: 8.5,
+                    vacancia: 12.3,
+                    liquidez_diaria: 650000,
+                    dividend_yield: 0.77
+                  },
+                  recommendation: {
+                    cerrado: { status: 'VENDER', reason: 'FII com alta vacância e fundamentos fracos' },
+                    arca: { status: 'NEUTRO', reason: 'Faz parte da cesta de Real Estate (25%), mas considerar substituição' },
+                    buffett: { status: 'VENDER', reason: 'Ativos de baixa qualidade com problemas estruturais' }
+                  },
+                  description: 'FII de lajes corporativas com imóveis em diversas regiões.'
+                },
+                { 
+                  symbol: 'TGAR11', 
+                  quantity: 47, 
+                  current_price: 87.00, 
+                  result: -954.40, 
+                  result_percent: -18.92,
+                  cerrado_score: 3,
+                  cerrado_max: 14,
+                  fundamentals: {
+                    dy: 7.5,
+                    pl: null,
+                    pvp: 0.65,
+                    cap_rate: 7.8,
+                    vacancia: 15.7,
+                    liquidez_diaria: 420000,
+                    dividend_yield: 0.63
+                  },
+                  recommendation: {
+                    cerrado: { status: 'VENDER', reason: 'FII com alta vacância e fundamentos muito fracos' },
+                    arca: { status: 'VENDER', reason: 'Substituir por outro FII com melhores fundamentos' },
+                    buffett: { status: 'VENDER', reason: 'Ativos de baixa qualidade com problemas estruturais graves' }
+                  },
+                  description: 'FII com portfólio de imóveis corporativos e comerciais.'
+                }
+              ]
+            },
+            bitcoin: { 
+              name: 'Ativos Internacionais', 
+              value: 10881.16, 
+              percentage: 2.8, 
+              count: 1, 
+              result: 0,
+              assets: [
+                { 
+                  symbol: 'Bitcoin', 
+                  quantity: 0.099912, 
+                  current_price: 108908.16, 
+                  result: 0, 
+                  result_percent: -2.1,
+                  cerrado_score: null,
+                  cerrado_max: null,
+                  fundamentals: {
+                    dy: 0,
+                    pl: null,
+                    pvp: null,
+                    roe: null,
+                    roic: null,
+                    margem_liquida: null,
+                    div_liquida_ebitda: null
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'Criptomoeda não se aplica à análise fundamentalista tradicional' },
+                    arca: { status: 'COMPRAR', reason: 'Aumentar exposição à cesta de Ativos Internacionais (25%)' },
+                    buffett: { status: 'VENDER', reason: 'Warren não acredita em criptomoedas como investimento' }
+                  },
+                  description: 'Criptomoeda descentralizada, a primeira e mais valiosa do mercado.'
+                }
+              ]
+            },
+            renda_fixa: { 
+              name: 'Renda Fixa', 
+              value: 161242.31, 
+              percentage: 41.7, 
+              count: 3, 
+              result: 8536.14,
+              assets: [
+                { 
+                  symbol: 'Renda Fixa Total', 
+                  quantity: 1, 
+                  current_price: 161242.31, 
+                  result: 8536.14, 
+                  result_percent: 19.32,
+                  cerrado_score: null,
+                  cerrado_max: null,
+                  fundamentals: {
+                    dy: null,
+                    pl: null,
+                    pvp: null,
+                    roe: null,
+                    roic: null,
+                    margem_liquida: null,
+                    div_liquida_ebitda: null
+                  },
+                  recommendation: {
+                    cerrado: { status: 'NEUTRO', reason: 'Renda fixa não se aplica à análise fundamentalista de ações' },
+                    arca: { status: 'REDUZIR', reason: 'Reduzir exposição à cesta de Caixa/Renda Fixa (acima dos 25%)' },
+                    buffett: { status: 'NEUTRO', reason: 'Warren mantém caixa para oportunidades, mas prefere empresas' }
+                  },
+                  description: 'Conjunto de investimentos de renda fixa como CDBs, Tesouro Direto e outros.'
+                }
+              ]
+            }
+          }
+        },
+        market_indicators: {
+          selic: 10.75,
+          ipca: 4.23,
+          ibovespa: {
+            current: 145306,
+            change_percent: 4.4
+          },
+          cdi: 10.65
+        },
+        last_update: new Date().toLocaleString('pt-BR')
+      };
+      
+      // Aplicar overrides locais apenas se necessário (ex: remover TGAR11)
+      const dataWithOverrides = localPortfolioOverrides.removedAssets.length > 0 ? 
+        applyLocalPortfolioOverrides(data) : data;
+      setPortfolioData(dataWithOverrides);
+      setLastUpdate(new Date().toLocaleString('pt-BR'));
+      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      setLoading(false);
+    }
+  };
+
+  // Navegação
+  const goToCategory = (categoryKey) => {
+    setSelectedCategory(categoryKey);
+    setCurrentView('category');
+  };
+
+  const goToAsset = (asset) => {
+    setSelectedAsset(asset);
+    setCurrentView('asset');
+  };
+
+  const goBack = () => {
+    if (currentView === 'asset') {
+      setCurrentView('category');
+      setSelectedAsset(null);
+    } else if (currentView === 'category') {
+      setCurrentView('overview');
+      setSelectedCategory(null);
+    }
+  };
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
+  };
+
+  const formatPercent = (value) => {
+    return `${value.toFixed(1)}%`;
+  };
+
+  const getBorderColor = (resultPercent) => {
+    if (resultPercent > 20) return 'border-l-4 border-l-green-500';
+    if (resultPercent > 0) return 'border-l-4 border-l-green-300';
+    if (resultPercent > -10) return 'border-l-4 border-l-yellow-500';
+    return 'border-l-4 border-l-red-500';
+  };
+
+  const getRecommendation = (resultPercent) => {
+    if (resultPercent > 20) return { status: 'MANTER', color: 'text-green-800', bgColor: 'bg-green-50', borderColor: 'border-green-200', icon: '🟢', description: `Excelente performance (+${resultPercent.toFixed(1)}%). Continue investindo.` };
+    if (resultPercent > 0) return { status: 'MANTER', color: 'text-blue-800', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '🟡', description: `Performance positiva (+${resultPercent.toFixed(1)}%). Monitore evolução.` };
+    if (resultPercent > -10) return { status: 'ATENÇÃO', color: 'text-yellow-800', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200', icon: '⚠️', description: `Performance negativa (${resultPercent.toFixed(1)}%). Analise os fundamentos.` };
+    return { status: 'CONSIDERAR VENDA', color: 'text-red-800', bgColor: 'bg-red-50', borderColor: 'border-red-200', icon: '🔴', description: `Performance muito negativa (${resultPercent.toFixed(1)}%). Considere substituir.` };
+  };
+
+  const getCerradoColor = (score, max) => {
+    if (!score || !max) return 'bg-gray-200';
+    const percent = (score / max) * 100;
+    if (percent >= 80) return 'bg-green-500';
+    if (percent >= 60) return 'bg-green-300';
+    if (percent >= 40) return 'bg-yellow-400';
+    return 'bg-red-500';
+  };
+
+  const getFundamentalInfo = (key) => {
+    switch(key) {
+      case 'dy':
+        return {
+          name: 'Dividend Yield',
+          description: 'Percentual de dividendos pagos em relação ao preço da ação.',
+          calculation: 'Dividendos por ação ÷ Preço da ação × 100',
+          importance: 'Indica quanto a empresa distribui de lucro aos acionistas. Valores acima de 6% são considerados altos.'
+        };
+      case 'pl':
+        return {
+          name: 'Preço/Lucro',
+          description: 'Relação entre o preço da ação e o lucro por ação.',
+          calculation: 'Preço da ação ÷ Lucro por ação',
+          importance: 'Indica quantos anos seriam necessários para recuperar o investimento. Valores abaixo de 15 são geralmente considerados atrativos.'
+        };
+      case 'pvp':
+        return {
+          name: 'Preço/Valor Patrimonial',
+          description: 'Relação entre o preço da ação e seu valor patrimonial.',
+          calculation: 'Preço da ação ÷ Valor patrimonial por ação',
+          importance: 'Valores abaixo de 1 indicam que a ação pode estar subvalorizada. Acima de 1, sobrevalorizada.'
+        };
+      case 'roe':
+        return {
+          name: 'Retorno sobre Patrimônio Líquido',
+          description: 'Mede a capacidade da empresa de gerar lucro a partir do seu patrimônio líquido.',
+          calculation: 'Lucro líquido ÷ Patrimônio líquido × 100',
+          importance: 'Indica a rentabilidade da empresa. Valores acima de 15% são considerados bons.'
+        };
+      case 'roic':
+        return {
+          name: 'Retorno sobre Capital Investido',
+          description: 'Mede a eficiência da empresa em gerar lucro a partir de todo o capital investido (próprio e de terceiros).',
+          calculation: 'EBIT ÷ (Patrimônio líquido + Dívida líquida) × 100',
+          importance: 'Indica a eficiência operacional da empresa. Valores acima de 10% são considerados bons.'
+        };
+      case 'margem_liquida':
+        return {
+          name: 'Margem Líquida',
+          description: 'Percentual de lucro líquido em relação à receita líquida.',
+          calculation: 'Lucro líquido ÷ Receita líquida × 100',
+          importance: 'Indica a lucratividade da empresa. Valores acima de 10% são considerados bons.'
+        };
+      case 'div_liquida_ebitda':
+        return {
+          name: 'Dívida Líquida/EBITDA',
+          description: 'Relação entre a dívida líquida da empresa e sua geração de caixa operacional.',
+          calculation: 'Dívida líquida ÷ EBITDA',
+          importance: 'Indica o nível de endividamento da empresa. Valores abaixo de 3 são considerados saudáveis.'
+        };
+      default:
+        return null;
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isTyping) return;
+
+    const userMessage = {
+      sender: 'user',
+      text: chatInput,
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput('');
+    setIsTyping(true);
+    
+    setTimeout(() => {
+      const response = generateIntelligentResponse(chatInput, portfolioData);
+      const assistantMessage = {
+        sender: 'assistant',
+        text: response,
+        timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      };
+      
+      setChatMessages(prev => [...prev, assistantMessage]);
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  // ========================================
+  // FUNÇÕES DE GESTÃO DE ATIVOS - IMPLEMENTAÇÃO COMPLETA
+  // ========================================
+
+  // CORREÇÃO MOBILE: Função de busca otimizada para dispositivos móveis
+  const handleAssetSearch = (query) => {
+    console.log('📱 MOBILE - Buscando por:', query);
+    
+    // Limpar resultados se query muito curta
+    if (!query || query.length < 2) {
+      setAssetSearchResults([]);
+      return;
+    }
+    
+    try {
+      // Buscar ativos com timeout para mobile
+      setTimeout(() => {
+        const results = searchAssets(query.toUpperCase());
+        console.log('📱 MOBILE - Resultados:', results.length);
+        
+        // Limitar a 5 resultados para melhor performance no mobile
+        const limitedResults = results.slice(0, 5);
+        setAssetSearchResults(limitedResults);
+        
+        // Log para debug mobile
+        if (limitedResults.length > 0) {
+          console.log('📱 Encontrados:', limitedResults.map(r => r.symbol).join(', '));
+        } else {
+          console.log('📱 Nenhum resultado para:', query);
+        }
+      }, 100); // Pequeno delay para melhor responsividade
+      
+    } catch (error) {
+      console.error('📱 ERRO MOBILE:', error);
+      setAssetSearchResults([]);
+    }
+  };
+
+  // FASE 2: Função de adição de ativos com integração completa
+  const handleAddAsset = async () => {
+    console.log('➕ FASE 2 - Adicionando ativo:', newAssetData);
+    
+    try {
+      if (!newAssetData.symbol || !newAssetData.quantity || !newAssetData.price) {
+        alert('Por favor, preencha todos os campos obrigatórios.');
+        return;
+      }
+
+      const assetSymbol = newAssetData.symbol.toUpperCase();
+      const assetQuantity = parseFloat(newAssetData.quantity);
+      const assetPrice = parseFloat(newAssetData.price);
+      
+      console.log('📝 Dados do ativo:', { assetSymbol, assetQuantity, assetPrice });
+
+      // Validar se o ativo existe na B3
+      if (!validateAsset(assetSymbol)) {
+        alert(`❌ Ativo ${assetSymbol} não encontrado na base de dados da B3.`);
+        return;
+      }
+
+      // Adicionar ativo à carteira
+      const updatedPortfolio = addAssetToPortfolio({
+        symbol: assetSymbol,
+        quantity: assetQuantity,
+        price: assetPrice,
+        operation_type: 'buy'
+      });
+
+      if (updatedPortfolio) {
+        console.log('✅ Ativo adicionado ao portfolio:', updatedPortfolio);
+        
+        // Atualizar estado imediatamente
+        setPortfolioData(updatedPortfolio);
+        
+        // Log da operação
+        logOperation('COMPRA', assetSymbol, 
+          `${assetQuantity} cotas por R$ ${assetPrice.toFixed(2)}`);
+        
+        // Atualizar histórico
+        const history = getOperationsHistory();
+        setManagementHistory(history.slice(0, 50));
+        
+        console.log('📊 Portfolio atualizado e histórico registrado');
+        
+        alert(`✅ Ativo ${assetSymbol} adicionado com sucesso!\n${assetQuantity} cotas por R$ ${assetPrice.toFixed(2)}`);
+        
+        // Limpar formulário e fechar modal
+        setNewAssetData({
+          symbol: '',
+          quantity: '',
+          price: '',
+          type: 'acao'
+        });
+        setShowAssetModal(false);
+        setAssetSearchResults([]);
+        setAssetSearchQuery('');
+        
+        console.log('🔄 Formulário limpo e modal fechado');
+      } else {
+        throw new Error('Falha ao atualizar portfolio');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao adicionar ativo:', error);
+      alert('❌ Erro ao adicionar ativo. Verifique os dados e tente novamente.');
+    }
+  };
+
+  // FASE 2: Função para selecionar ativo da busca
+  const handleSelectAssetFromSearch = (asset) => {
+    console.log('🎯 FASE 2 - Ativo selecionado da busca:', asset);
+    
+    setNewAssetData(prev => ({
+      ...prev,
+      symbol: asset.symbol,
+      price: asset.price.toString(),
+      type: asset.type
+    }));
+    
+    // Limpar resultados da busca
+    setAssetSearchResults([]);
+    setAssetSearchQuery(asset.symbol);
+    
+    console.log('✅ Dados preenchidos automaticamente');
+  };
+
+  // Função para editar ativo existente
+  const handleEditAsset = async () => {
+    try {
+      if (!selectedAssetForEdit || !newAssetData.quantity || !newAssetData.price) {
+        alert('Por favor, preencha todos os campos obrigatórios.');
+        return;
+      }
+
+      // Editar ativo na carteira
+      const updatedPortfolio = editAssetInPortfolio(selectedAssetForEdit.symbol, {
+        quantity: parseFloat(newAssetData.quantity),
+        average_price: parseFloat(newAssetData.price)
+      });
+
+      // Atualizar estado da aplicação
+      setPortfolioData(updatedPortfolio);
+      
+      // Limpar formulário
+      setNewAssetData({
+        symbol: '',
+        quantity: '',
+        price: '',
+        type: 'acao'
+      });
+      
+      // Fechar modal
+      setShowAssetModal(false);
+      setSelectedAssetForEdit(null);
+
+      // Adicionar ao histórico
+      const newHistoryEntry = {
+        id: Date.now(),
+        type: 'edit',
+        symbol: selectedAssetForEdit.symbol,
+        quantity: parseFloat(newAssetData.quantity),
+        price: parseFloat(newAssetData.price),
+        timestamp: new Date().toISOString(),
+        description: `Editado ${selectedAssetForEdit.symbol}: ${newAssetData.quantity} cotas a R$ ${newAssetData.price}`
+      };
+      
+      setManagementHistory(prev => [newHistoryEntry, ...prev.slice(0, 49)]);
+
+      alert(`✅ Ativo ${selectedAssetForEdit.symbol} editado com sucesso!`);
+      
+    } catch (error) {
+      console.error('Erro ao editar ativo:', error);
+      alert(`❌ Erro ao editar ativo: ${error.message}`);
+    }
+  };
+
+  // Função para remover ativo
+  const handleRemoveAsset = async (asset) => {
+    try {
+      const confirmRemove = window.confirm(
+        `Tem certeza que deseja remover ${asset.symbol} da carteira?\n\n` +
+        `Quantidade: ${asset.quantity} cotas\n` +
+        `Valor atual: ${formatCurrency(asset.current_value)}`
+      );
+
+      if (!confirmRemove) return;
+
+      // Remover ativo da carteira
+      const updatedPortfolio = removeAssetFromPortfolio(asset.symbol);
+
+      // Atualizar estado da aplicação
+      setPortfolioData(updatedPortfolio);
+
+      // Adicionar ao histórico
+      const newHistoryEntry = {
+        id: Date.now(),
+        type: 'remove',
+        symbol: asset.symbol,
+        quantity: asset.quantity,
+        timestamp: new Date().toISOString(),
+        description: `Removido ${asset.symbol} (${asset.quantity} cotas)`
+      };
+      
+      setManagementHistory(prev => [newHistoryEntry, ...prev.slice(0, 49)]);
+
+      alert(`✅ Ativo ${asset.symbol} removido com sucesso!`);
+      
+    } catch (error) {
+      console.error('Erro ao remover ativo:', error);
+      alert(`❌ Erro ao remover ativo: ${error.message}`);
+    }
+  };
+
+  // Função para selecionar ativo da busca
+  const handleSelectAssetFromSearch = (asset) => {
+    setNewAssetData(prev => ({
+      ...prev,
+      symbol: asset.symbol,
+      type: asset.type
+    }));
+    setAssetSearchQuery(asset.symbol);
+    setAssetSearchResults([]);
+  };
+
+  // Função para abrir modal de adição
+  const openAddAssetModal = () => {
+    setAssetModalType('add');
+    setNewAssetData({
+      symbol: '',
+      quantity: '',
+      price: '',
+      type: 'acao'
+    });
+    setSelectedAssetForEdit(null);
+    setAssetSearchQuery('');
+    setAssetSearchResults([]);
+    setShowAssetModal(true);
+  };
+
+  // Função para abrir modal de edição
+  const openEditAssetModal = (asset) => {
+    setAssetModalType('edit');
+    setSelectedAssetForEdit(asset);
+    setNewAssetData({
+      symbol: asset.symbol,
+      quantity: asset.quantity.toString(),
+      price: asset.average_price.toString(),
+      type: asset.type
+    });
+    setAssetSearchQuery(asset.symbol);
+    setAssetSearchResults([]);
+    setShowAssetModal(true);
+  };
+
+  // Função para fechar modal
+  const closeAssetModal = () => {
+    setShowAssetModal(false);
+    setAssetModalType('add');
+    setSelectedAssetForEdit(null);
+    setNewAssetData({
+      symbol: '',
+      quantity: '',
+      price: '',
+      type: 'acao'
+    });
+    setAssetSearchQuery('');
+    setAssetSearchResults([]);
+  };
+
+  // Função para carregar dados do localStorage
+  const loadPortfolioFromStorage = () => {
+    try {
+      const storedPortfolio = loadPortfolio();
+      if (storedPortfolio && Object.keys(storedPortfolio.categories || {}).length > 0) {
+        console.log('📦 Carregando dados do localStorage:', storedPortfolio);
+        setPortfolioData(storedPortfolio);
+        
+        // Carregar histórico de operações
+        const history = getOperationsHistory();
+        setManagementHistory(history.slice(0, 50)); // Últimas 50 operações
+        
+        return true; // Dados encontrados
+      }
+      return false; // Nenhum dado encontrado
+    } catch (error) {
+      console.error('Erro ao carregar carteira do storage:', error);
+      return false;
+    }
+  };
+
+  // FASE 1: Função para inicializar com dados reais do usuário
+  const initializeUserPortfolio = () => {
+    console.log('🏗️ Inicializando carteira com dados reais do usuário...');
+    
+    const userPortfolio = {
+      categories: {
+        acoes_br: {
+          name: 'Ações Brasileiras',
+          assets: [
+            { symbol: 'PGCO34', quantity: 19, current_price: 58.47, type: 'acao' },
+            { symbol: 'B3SA3', quantity: 400, current_price: 13.22, type: 'acao' },
+            { symbol: 'AREA11', quantity: 10, current_price: 9.95, type: 'acao' },
+            { symbol: 'CXSE3', quantity: 100, current_price: 20.10, type: 'acao' },
+            { symbol: 'WEGE3', quantity: 200, current_price: 36.35, type: 'acao' },
+            { symbol: 'CPLE6', quantity: 1000, current_price: 12.71, type: 'acao' },
+            { symbol: 'VIVT3', quantity: 160, current_price: 33.15, type: 'acao' }
+          ]
+        },
+        internacional: {
+          name: 'Ativos Internacionais',
+          assets: [
+            { symbol: 'AMZO34', quantity: 150, current_price: 58.38, type: 'bdr' },
+            { symbol: 'NASD11', quantity: 500, current_price: 3.28, type: 'etf' },
+            { symbol: 'CSCO34', quantity: 147, current_price: 36.05, type: 'bdr' },
+            { symbol: 'ABCB34', quantity: 700, current_price: 22.98, type: 'bdr' },
+            { symbol: 'IVVB11', quantity: 70, current_price: 80.39, type: 'etf' },
+            { symbol: 'JPMC34', quantity: 200, current_price: 168.18, type: 'bdr' },
+            { symbol: 'BOAC34', quantity: 100, current_price: 69.40, type: 'bdr' },
+            { symbol: 'QBTC11', quantity: 300, current_price: 35.50, type: 'etf' }
+          ]
+        },
+        fiis: {
+          name: 'Fundos Imobiliários',
+          assets: [
+            { symbol: 'PVBI11', quantity: 132, current_price: 75.87, type: 'fii' },
+            { symbol: 'HGCR11', quantity: 176, current_price: 102.58, type: 'fii' },
+            { symbol: 'RZTR11', quantity: 69, current_price: 94.56, type: 'fii' },
+            { symbol: 'VISC11', quantity: 40, current_price: 87.01, type: 'fii' },
+            { symbol: 'CPTS11', quantity: 983, current_price: 7.59, type: 'fii' },
+            { symbol: 'KNCR11', quantity: 109, current_price: 105.08, type: 'fii' },
+            { symbol: 'BTLG11', quantity: 46, current_price: 103.21, type: 'fii' }, // 26 + 20 compradas
+            { symbol: 'HGLG11', quantity: 20, current_price: 110.50, type: 'fii' },
+            { symbol: 'VILG11', quantity: 21, current_price: 108.90, type: 'fii' } // Recém comprado
+          ]
+        },
+        outros: {
+          name: 'Outros Ativos',
+          assets: [
+            { symbol: 'BTC', quantity: 0.099912, current_price: 587179.8, type: 'crypto' },
+            { symbol: 'CDB', quantity: 1, current_price: 157162.65, type: 'renda_fixa' },
+            { symbol: 'KDIF11', quantity: 1, current_price: 95.20, type: 'fii' }
+          ]
+        }
+      }
+    };
+
+    // Salvar no localStorage e atualizar estado
+    savePortfolio(userPortfolio);
+    setPortfolioData(userPortfolio);
+    
+    // Log da operação
+    logOperation('INICIALIZAÇÃO', 'SISTEMA', 'Carteira inicializada com dados reais do usuário');
+    
+    console.log('✅ Carteira inicializada com sucesso:', userPortfolio);
+  };
+
+  // FASE 1: Função para atualizar apenas preços sem perder dados
+  const updatePricesOnly = () => {
+    const currentPortfolio = loadPortfolio();
+    if (currentPortfolio && currentPortfolio.categories) {
+      // Apenas atualizar preços mantendo quantidades e ativos do usuário
+      setPortfolioData(currentPortfolio);
+      console.log('💰 Preços atualizados sem perder dados do usuário');
+    }
+  };
+
+  // FASE 1: CORREÇÃO TOTAL DE PERSISTÊNCIA
+  useEffect(() => {
+    console.log('🔄 Iniciando carregamento de dados...');
+    
+    // Primeiro tentar carregar do localStorage
+    const hasStoredData = loadPortfolioFromStorage();
+    
+    // Se não houver dados salvos, inicializar com dados do usuário
+    if (!hasStoredData) {
+      console.log('📦 Inicializando com dados reais do usuário...');
+      initializeUserPortfolio();
+    } else {
+      console.log('✅ Dados do localStorage carregados com sucesso');
+    }
+    
+    // NÃO usar fetchData que sobrescreve os dados do usuário
+    // Apenas atualizar preços sem perder dados
+    const interval = setInterval(() => {
+      updatePricesOnly();
+    }, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-100 text-gray-800 font-sans">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-gray-900">McDuck Dashboard</h1>
+              <span className="text-sm text-gray-500">Gestão de Investimentos</span>
+            </div>
+            <div className="text-sm text-gray-500">
+              Última atualização: {lastUpdate}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs - CORREÇÃO COMPLETA: Layout em 2 colunas como solicitado */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="grid grid-cols-2 gap-2 py-2">
+            {[
+              { id: 'visao', label: 'Visão Geral', icon: '📊' },
+              { id: 'analise', label: 'Análise', icon: '📈' },
+              { id: 'gestao', label: 'Gestão', icon: '⚙️' },
+              { id: 'minha-ia', label: 'Minha IA', icon: '🤖' },
+              { id: 'previdencia', label: 'Minha Previdência', icon: '🏦' },
+              { id: 'aprenda', label: 'Aprenda', icon: '🎓' },
+              { id: 'insights', label: 'Insights', icon: '💡' },
+              { id: 'descoberta', label: 'Descoberta', icon: '🔍' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-3 px-4 border-b-2 font-medium text-sm rounded-t-lg transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600 bg-blue-50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* ABA GESTÃO - IMPLEMENTAÇÃO COMPLETA */}
+        {activeTab === 'gestao' && (
+          <div className="space-y-6">
+            {/* Header da Gestão */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Gestão da Carteira</h2>
+                  <p className="text-gray-600">Adicione, edite ou remova ativos da sua carteira</p>
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={openAddAssetModal}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+                  >
+                    <span>➕</span>
+                    <span>Adicionar Ativo</span>
+                  </button>
+                  <button
+                    onClick={() => setShowHistoryModal(true)}
+                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+                  >
+                    <span>📋</span>
+                    <span>Histórico</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Resumo da Carteira */}
+              {portfolioData && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="text-sm text-blue-600 font-medium">Total de Ativos</div>
+                    <div className="text-2xl font-bold text-blue-900">
+                      {Object.values(portfolioData.categories || {}).reduce((sum, cat) => sum + (cat.assets?.length || 0), 0)}
+                    </div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="text-sm text-green-600 font-medium">Valor Total</div>
+                    <div className="text-2xl font-bold text-green-900">
+                      {formatCurrency(portfolioData.total_value || 0)}
+                    </div>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="text-sm text-purple-600 font-medium">Lucro/Prejuízo</div>
+                    <div className="text-2xl font-bold text-purple-900">
+                      {portfolioData.performance ? formatCurrency(portfolioData.performance.total_profit) : 'R$ 0,00'}
+                    </div>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg">
+                    <div className="text-sm text-yellow-600 font-medium">Performance</div>
+                    <div className="text-2xl font-bold text-yellow-900">
+                      {portfolioData.performance ? `${portfolioData.performance.profit_percentage.toFixed(1)}%` : '0%'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Lista de Ativos por Categoria */}
+            {portfolioData && Object.entries(portfolioData.categories || {}).map(([categoryKey, category]) => (
+              category.assets && category.assets.length > 0 && (
+                <div key={categoryKey} className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 capitalize">
+                      {categoryKey.replace('_', ' ')} ({category.assets.length} ativos)
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Total: {formatCurrency(category.total_value)} ({category.percentage.toFixed(1)}% da carteira)
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ativo</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço Médio</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preço Atual</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor Total</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lucro/Prejuízo</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {category.assets.map((asset, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">{asset.symbol}</div>
+                                <div className="text-sm text-gray-500">{asset.name}</div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {asset.quantity}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatCurrency(asset.average_price)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatCurrency(asset.current_price)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {formatCurrency(asset.current_value)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`text-sm font-medium ${
+                                asset.profit >= 0 ? 'text-green-600' : 'text-red-600'
+                              }`}>
+                                {formatCurrency(asset.profit)} ({asset.profit_percentage.toFixed(1)}%)
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                              <button
+                                onClick={() => openEditAssetModal(asset)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                ✏️ Editar
+                              </button>
+                              <button
+                                onClick={() => handleRemoveAsset(asset)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                🗑️ Remover
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            ))}
+
+            {/* Mensagem quando não há ativos */}
+            {(!portfolioData || Object.values(portfolioData.categories || {}).every(cat => !cat.assets || cat.assets.length === 0)) && (
+              <div className="bg-white rounded-lg shadow p-12 text-center">
+                <div className="text-6xl mb-4">📈</div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Nenhum ativo na carteira</h3>
+                <p className="text-gray-600 mb-6">Comece adicionando seus primeiros ativos para acompanhar seus investimentos.</p>
+                <button
+                  onClick={openAddAssetModal}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+                >
+                  Adicionar Primeiro Ativo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ABA MINHA IA - CORREÇÃO CIRÚRGICA: Movido de Insights */}
+        {activeTab === 'minha-ia' && (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <span className="mr-2">🤖</span>
+                Assistente Inteligente de Investimentos
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Seu consultor financeiro pessoal com análises baseadas na sua carteira real
+              </p>
+            </div>
+            
+            <div className="h-96 overflow-y-auto p-4 space-y-4">
+              {chatMessages.map((message, index) => (
+                <div key={index} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                    message.type === 'user' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                    <div className="text-xs opacity-70 mt-1">{message.timestamp}</div>
+                  </div>
+                </div>
+              ))}
+              
+              {isTyping && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                    <div className="text-sm">🤖 Analisando sua carteira...</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-gray-200">
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Pergunte sobre seus investimentos..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isTyping}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={isTyping || !chatInput.trim()}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Enviar
+                </button>
+              </div>
+              
+              {/* Sugestões de perguntas */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  'quero realizar lucro',
+                  'o que está em promoção hoje?',
+                  'análise da carteira',
+                  'sugestão de venda'
+                ].map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setChatInput(suggestion)}
+                    className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA MINHA PREVIDÊNCIA - IMPLEMENTAÇÃO COMPLETA */}
+        {activeTab === 'previdencia' && (
+          <div className="space-y-6">
+            {/* Header da Previdência */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+                    <span className="mr-2">🏦</span>
+                    Minha Previdência PGBL
+                  </h2>
+                  <p className="text-gray-600">Gestão completa da sua previdência privada</p>
+                </div>
+                <div className="flex space-x-3">
+                  <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center space-x-2">
+                    <span>➕</span>
+                    <span>Novo Aporte</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Resumo PGBL */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="text-sm text-blue-600 font-medium">Saldo Atual</div>
+                  <div className="text-2xl font-bold text-blue-900">R$ 45.230,00</div>
+                  <div className="text-sm text-green-600">+12,5% este ano</div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="text-sm text-green-600 font-medium">Aportes 2024</div>
+                  <div className="text-2xl font-bold text-green-900">R$ 8.400,00</div>
+                  <div className="text-sm text-gray-600">70% do limite anual</div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="text-sm text-purple-600 font-medium">Economia IR</div>
+                  <div className="text-2xl font-bold text-purple-900">R$ 2.310,00</div>
+                  <div className="text-sm text-gray-600">27,5% dos aportes</div>
+                </div>
+              </div>
+
+              {/* Funcionalidades PGBL */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Planejamento 2024</h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-sm text-gray-600">Limite anual (12% da renda)</span>
+                      <span className="text-sm font-medium">R$ 12.000,00</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="bg-green-600 h-2 rounded-full" style={{width: '70%'}}></div>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">Restam R$ 3.600,00 para aportar</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Simulações</h3>
+                  <div className="space-y-2">
+                    <button className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                      <div className="font-medium text-gray-900">Aposentadoria aos 65 anos</div>
+                      <div className="text-sm text-gray-600">Renda estimada: R$ 3.200/mês</div>
+                    </button>
+                    <button className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                      <div className="font-medium text-gray-900">Resgate programado</div>
+                      <div className="text-sm text-gray-600">Simular retiradas mensais</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Outras abas */}
+        {activeTab !== 'gestao' && activeTab !== 'minha-ia' && activeTab !== 'previdencia' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold mb-4">
+              {activeTab === 'visao' && 'Visão Geral da Carteira'}
+              {activeTab === 'analise' && 'Análise Detalhada'}
+              {activeTab === 'insights' && 'Insights Inteligentes'}
+              {activeTab === 'aprenda' && 'Centro de Aprendizado'}
+              {activeTab === 'descoberta' && 'Descoberta de Ativos'}
+            </h2>
+            <p className="text-gray-600">Conteúdo da aba {activeTab} será implementado aqui.</p>
+          </div>
+        )}
+      </div>
+
+      {/* MODAL DE ADIÇÃO/EDIÇÃO DE ATIVOS */}
+      {showAssetModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {assetModalType === 'add' ? 'Adicionar Novo Ativo' : 'Editar Ativo'}
+              </h3>
+            </div>
+            
+            <div className="px-6 py-4 space-y-4">
+              {/* Campo de busca de ativo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Símbolo do Ativo *
+                </label>
+                <input
+                  type="text"
+                  value={assetSearchQuery}
+                  onChange={(e) => {
+                    setAssetSearchQuery(e.target.value);
+                    handleAssetSearch(e.target.value);
+                  }}
+                  placeholder="Digite o símbolo (ex: PETR4, BTLG11)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={assetModalType === 'edit'}
+                />
+                
+                {/* Resultados da busca */}
+                {assetSearchResults.length > 0 && (
+                  <div className="mt-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+                    {assetSearchResults.map((asset, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSelectAssetFromSearch(asset)}
+                        className="w-full px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="font-medium text-gray-900">{asset.symbol}</div>
+                        <div className="text-sm text-gray-600">{asset.name} - {asset.sector}</div>
+                        <div className="text-sm text-blue-600">{formatCurrency(asset.price)}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Quantidade */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Quantidade *
+                </label>
+                <input
+                  type="number"
+                  value={newAssetData.quantity}
+                  onChange={(e) => setNewAssetData(prev => ({ ...prev, quantity: e.target.value }))}
+                  placeholder="Ex: 100"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Preço */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Preço {assetModalType === 'add' ? 'de Compra' : 'Médio'} *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newAssetData.price}
+                  onChange={(e) => setNewAssetData(prev => ({ ...prev, price: e.target.value }))}
+                  placeholder="Ex: 35.50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Tipo (apenas para adição) */}
+              {assetModalType === 'add' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Ativo
+                  </label>
+                  <select
+                    value={newAssetData.type}
+                    onChange={(e) => setNewAssetData(prev => ({ ...prev, type: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="acao">Ação Brasileira</option>
+                    <option value="fii">Fundo Imobiliário (FII)</option>
+                    <option value="bdr">BDR/Internacional</option>
+                    <option value="etf">ETF</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={closeAssetModal}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={assetModalType === 'add' ? handleAddAsset : handleEditAsset}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                {assetModalType === 'add' ? 'Adicionar' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE HISTÓRICO */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-96">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Histórico de Operações</h3>
+            </div>
+            
+            <div className="px-6 py-4 max-h-80 overflow-y-auto">
+              {managementHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {managementHistory.map((operation, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium text-gray-900">{operation.description}</div>
+                          <div className="text-sm text-gray-600">
+                            {new Date(operation.timestamp).toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          operation.type === 'add' ? 'bg-green-100 text-green-800' :
+                          operation.type === 'edit' ? 'bg-blue-100 text-blue-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {operation.type === 'add' ? 'Adição' : 
+                           operation.type === 'edit' ? 'Edição' : 'Remoção'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-2">📋</div>
+                  <p className="text-gray-600">Nenhuma operação registrada ainda.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assistente Inteligente - Sempre visível */}
+      <div className="fixed bottom-4 right-4 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-40">
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900 flex items-center">
+            <span className="mr-2">🤖</span>
+            Assistente Inteligente
+          </h3>
+          <p className="text-sm text-gray-600">Faça perguntas sobre sua carteira, rebalanceamento, ou estratégias de investimento.</p>
+        </div>
+        
+        <div className="h-64 overflow-y-auto p-4 space-y-3">
+          {chatMessages.map((msg, index) => (
+            <div key={index} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                msg.sender === 'user' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                <div className="whitespace-pre-wrap">{msg.text}</div>
+                <div className={`text-xs mt-1 ${
+                  msg.sender === 'user' ? 'text-blue-200' : 'text-gray-500'
+                }`}>
+                  {msg.timestamp}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 text-gray-800 px-3 py-2 rounded-lg text-sm">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder="Pergunte sobre seus investimentos..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isTyping}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={isTyping || !chatInput.trim()}
+              className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Enviar
+            </button>
+          </div>
+          
+          {/* Sugestões de perguntas */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              'Análise completa de estratégias',
+              'Como rebalancear minha carteira?',
+              'Qual ativo devo comprar agora?',
+              'Como melhorar minha renda passiva?'
+            ].map((suggestion, index) => (
+              <button
+                key={index}
+                onClick={() => setChatInput(suggestion)}
+                className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+

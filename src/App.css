@@ -1,6 +1,670 @@
+/* McDuck Dashboard - Estilos Restaurados */
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0;
   text-align: left;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+body {
+  background-color: #f5f5f7;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+/* Estilos para as abas de navegação */
+.tabs-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: #fff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tabs-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab.active {
+  color: #0066cc;
+  border-bottom: 2px solid #0066cc;
+}
+
+.tab-icon {
+  font-size: 18px;
+  margin-top: 4px;
+}
+
+/* Estilos para o conteúdo das abas */
+.tab-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Estilos para os cards */
+.card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+/* Estilos para categorias */
+.category-card {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.category-card.positive {
+  background-color: rgba(52, 199, 89, 0.1);
+}
+
+.category-card.negative {
+  background-color: rgba(255, 59, 48, 0.1);
+}
+
+.category-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.category-card p {
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Estilos para ativos */
+.asset-card {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.asset-card.positive {
+  background-color: rgba(52, 199, 89, 0.1);
+}
+
+.asset-card.negative {
+  background-color: rgba(255, 59, 48, 0.1);
+}
+
+.asset-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.asset-card p {
+  font-size: 14px;
+  margin: 0 0 4px 0;
+}
+
+.asset-result {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* Estilos para texto positivo/negativo */
+.positive {
+  color: #34c759;
+}
+
+.negative {
+  color: #ff3b30;
+}
+
+/* Estilos para a aba de gestão */
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.action-button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s;
+}
+
+.primary {
+  background-color: #0066cc;
+  color: white;
+}
+
+.primary:hover {
+  background-color: #0055b3;
+}
+
+.secondary {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.secondary:hover {
+  background-color: #d0d0d0;
+}
+
+.portfolio-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  background-color: #f8f8f8;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.summary-value {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.assets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asset-item {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.asset-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.asset-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.asset-type {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.asset-type.fii {
+  background-color: #ffecb3;
+  color: #e65100;
+}
+
+.asset-type.acao {
+  background-color: #e3f2fd;
+  color: #0277bd;
+}
+
+.asset-type.etf {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.asset-type.internacional {
+  background-color: #e0f7fa;
+  color: #006064;
+}
+
+.asset-details {
+  font-size: 14px;
+  color: #666;
+}
+
+.asset-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.asset-action {
+  font-size: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #0066cc;
+}
+
+.asset-action.edit:hover {
+  text-decoration: underline;
+}
+
+/* Estilos para modais */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Estilos para busca de ativos */
+.search-container {
+  position: relative;
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.search-result-item {
+  padding: 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.search-result-item:hover {
+  background-color: #f5f5f5;
+}
+
+.result-details {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* Estilos para o chat da IA */
+.ai-assistant-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+}
+
+.ai-header {
+  margin-bottom: 16px;
+}
+
+.ai-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.ai-header p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-message {
+  display: flex;
+  max-width: 80%;
+}
+
+.chat-message.user {
+  align-self: flex-end;
+}
+
+.chat-message.ai {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: 12px;
+  border-radius: 18px;
+  position: relative;
+}
+
+.chat-message.user .message-content {
+  background-color: #0066cc;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-message.ai .message-content {
+  background-color: #f0f0f0;
+  color: #333;
+  border-bottom-left-radius: 4px;
+}
+
+.message-content p {
+  margin: 0 0 8px 0;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-time {
+  font-size: 11px;
+  opacity: 0.7;
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+}
+
+.typing .message-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing span {
+  width: 8px;
+  height: 8px;
+  background-color: #999;
+  border-radius: 50%;
+  display: inline-block;
+  animation: typing 1s infinite ease-in-out;
+}
+
+.typing span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.chat-input-container {
+  display: flex;
+  padding: 12px;
+  border-top: 1px solid #eee;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 24px;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.send-button {
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 12px 12px;
+}
+
+.suggestion-chip {
+  background-color: #f0f0f0;
+  padding: 8px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.suggestion-chip:hover {
+  background-color: #e0e0e0;
+}
+
+/* Estilos para a aba de previdência */
+.previdencia-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.previdencia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.previdencia-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.previdencia-summary {
+  display: flex;
+  justify-content: space-between;
+  background-color: #f8f8f8;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.previdencia-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.previdencia-summary-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.previdencia-summary-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.previdencia-fundos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.previdencia-fundo-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.previdencia-fundo-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.previdencia-fundo-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.previdencia-fundo-rentabilidade {
+  font-weight: 600;
+}
+
+.previdencia-fundo-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #666;
+}
+
+.previdencia-periodo-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.periodo-button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  background-color: #fff;
+}
+
+.periodo-button.active {
+  background-color: #0066cc;
+  color: white;
+  border-color: #0066cc;
+}
+
+/* Estilos para os piores ativos */
+.worst-assets {
+  margin-top: 16px;
+}
+
+.worst-assets-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.warning-icon {
+  color: #ff9500;
+  font-size: 20px;
+}
+
+/* Estilos para ativos internacionais */
+.international-assets {
+  color: #0066cc;
+  font-weight: 500;
 }
